@@ -35,6 +35,7 @@ def fetch_recent_tracks(limit=200):
 
         response = requests.get(BASE_URL, params=params)
         data = response.json()
+        print(f"API Response: {data}")
 
         # Get total pages on first call
         if page == 1:
@@ -93,4 +94,4 @@ if __name__ == "__main__":
     print("\nPreview of your data:")
     for track in tracks[:3]:
         print(f"  {track['artist']} — {track['track_name']} "
-              f"({track['timestamp']})")
+              f"({track['timestamp']})")              
