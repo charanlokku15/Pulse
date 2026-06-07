@@ -113,7 +113,6 @@ def generate_report(prompt):
     )
 
     data = response.json()
-    print("Gemini response:", data)
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
