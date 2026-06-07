@@ -2,3 +2,5 @@ venv/
 Takeout/
 data/
 .env
+pulse.db
+logs/
