@@ -26,11 +26,20 @@ interface Fingerprint {
   days_active: number;
 }
 
+interface TribeMember {
+  username: string;
+  similarity: number;
+  top_mood: string;
+  avg_energy: number;
+  days_active: number;
+}
+
 interface DashboardData {
   mood_timeline: MoodDay[];
   top_artists: Artist[];
   fingerprint: Fingerprint;
   weekly_report: string;
+  taste_tribe: TribeMember[];
 }
 
 const MOOD_COLORS: Record<string, string> = {
@@ -139,7 +148,7 @@ export default function Home() {
       </div>
 
       {/* Top Artists */}
-      <div className="bg-gray-900 rounded-xl p-6 mb-6">
+      <div className="bg-gray-900 ratio rounded-xl p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Top Artists</h2>
         <div className="space-y-2">
           {data.top_artists.slice(0, 8).map((a, i) => (
@@ -164,12 +173,55 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Taste Tribe */}
+      {data.taste_tribe && data.taste_tribe.length > 0 && (
+        <div className="bg-gray-900 rounded-xl p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-1">Taste Tribe</h2>
+          <p className="text-gray-400 text-sm mb-4">
+            People who listen the way you do
+          </p>
+          <div className="space-y-3">
+            {data.taste_tribe.map((user) => (
+              <div key={user.username}
+                className="flex items-center gap-4 bg-gray-800 rounded-lg p-3">
+                <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                  {user.username[0].toUpperCase()}
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-sm">{user.username}</span>
+                    <span className="text-purple-400 font-semibold">
+                      {user.similarity}% match
+                    </span>
+                  </div>
+                  <div className="flex gap-3 mt-1">
+                    <span className="text-gray-400 text-xs">
+                      {MOOD_EMOJI[user.top_mood] || "⚪"} {user.top_mood}
+                    </span>
+                    <span className="text-gray-400 text-xs">
+                      ⚡ {Math.round(user.avg_energy * 100)}% energy
+                    </span>
+                    <span className="text-gray-400 text-xs">
+                      📅 {user.days_active} days
+                    </span>
+                  </div>
+                  <div className="bg-gray-700 rounded-full h-1 mt-2">
+                    <div
+                      className="h-1 rounded-full bg-purple-400"
+                      style={{ width: `${user.similarity}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Weekly Report */}
       {data.weekly_report && (
         <div className="bg-gray-900 rounded-xl p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Weekly Pulse Report
-          </h2>
+          <h2 className="text-xl font-semibold mb-4">Weekly Pulse Report</h2>
           <p className="text-gray-300 leading-relaxed whitespace-pre-line">
             {data.weekly_report}
           </p>
