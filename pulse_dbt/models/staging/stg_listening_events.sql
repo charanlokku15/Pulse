@@ -9,7 +9,7 @@ WITH raw AS (
         timestamp,
         unix_timestamp,
         loaded_at
-    FROM raw_listening_events
+    FROM {{ source('pulse_data', 'raw_listening_events') }}
 ),
 
 cleaned AS (
@@ -23,14 +23,14 @@ cleaned AS (
         -- Fix playlist-as-artist problem
         -- Playlists often contain these patterns
         CASE
-            WHEN artist ILIKE '%top%songs%'    THEN 'Unknown Artist'
-            WHEN artist ILIKE '%hit songs%'    THEN 'Unknown Artist'
-            WHEN artist ILIKE '%best songs%'   THEN 'Unknown Artist'
-            WHEN artist ILIKE '%collection%'   THEN 'Unknown Artist'
-            WHEN artist ILIKE '%non stop%'     THEN 'Unknown Artist'
-            WHEN artist ILIKE '%tamil hits%'   THEN 'Unknown Artist'
-            WHEN artist ILIKE '%telugu songs%' THEN 'Unknown Artist'
-            WHEN artist ILIKE '%jukebox%'      THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%top%songs%'    THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%hit songs%'    THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%best songs%'   THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%collection%'   THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%non stop%'     THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%tamil hits%'   THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%telugu songs%' THEN 'Unknown Artist'
+            WHEN LOWER(artist) LIKE '%jukebox%'      THEN 'Unknown Artist'
             ELSE TRIM(artist)
         END                                               AS artist_clean,
 
@@ -42,16 +42,16 @@ cleaned AS (
 
         -- Parse timestamp into proper date parts
         timestamp                                         AS played_at_str,
-        TO_TIMESTAMP(unix_timestamp)                      AS played_at,
-        DATE_TRUNC('day', TO_TIMESTAMP(unix_timestamp))   AS played_date,
-        HOUR(TO_TIMESTAMP(unix_timestamp))                AS played_hour,
-        DAYOFWEEK(TO_TIMESTAMP(unix_timestamp))           AS played_day_of_week,
+        TIMESTAMP_SECONDS(unix_timestamp)                      AS played_at,
+        DATE_TRUNC(TIMESTAMP_SECONDS(unix_timestamp), DAY)   AS played_date,
+        EXTRACT(HOUR FROM TIMESTAMP_SECONDS(unix_timestamp))                AS played_hour,
+        EXTRACT(DAYOFWEEK FROM TIMESTAMP_SECONDS(unix_timestamp))           AS played_day_of_week,
 
         -- Time of day bucket
         CASE
-            WHEN HOUR(TO_TIMESTAMP(unix_timestamp)) BETWEEN 5  AND 11 THEN 'morning'
-            WHEN HOUR(TO_TIMESTAMP(unix_timestamp)) BETWEEN 12 AND 17 THEN 'afternoon'
-            WHEN HOUR(TO_TIMESTAMP(unix_timestamp)) BETWEEN 18 AND 21 THEN 'evening'
+            WHEN EXTRACT(HOUR FROM TIMESTAMP_SECONDS(unix_timestamp)) BETWEEN 5  AND 11 THEN 'morning'
+            WHEN EXTRACT(HOUR FROM TIMESTAMP_SECONDS(unix_timestamp)) BETWEEN 12 AND 17 THEN 'afternoon'
+            WHEN EXTRACT(HOUR FROM TIMESTAMP_SECONDS(unix_timestamp)) BETWEEN 18 AND 21 THEN 'evening'
             ELSE 'night'
         END                                               AS time_of_day,
 

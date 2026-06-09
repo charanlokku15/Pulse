@@ -16,8 +16,8 @@ WITH listening_with_features AS (
         f.tempo,
         f.danceability,
         f.mood_label
-    FROM stg_listening_events e
-    LEFT JOIN track_features f
+    FROM {{ ref('stg_listening_events') }} e
+    LEFT JOIN {{ source('pulse_data', 'track_features') }} f
         ON e.track_name = f.track_name
     WHERE f.mood_label IS NOT NULL
 ),
@@ -39,7 +39,14 @@ daily_stats AS (
         COUNT(CASE WHEN mood_label = 'neutral'     THEN 1 END) AS neutral_count,
 
         -- Most listened time of day
-        MODE() WITHIN GROUP (ORDER BY time_of_day) AS dominant_time_of_day
+        (SELECT time_of_day FROM (
+            SELECT time_of_day, COUNT(*) as cnt
+            FROM {{ ref('stg_listening_events') }} lf2
+            WHERE lf2.played_date = listening_with_features.played_date
+            GROUP BY time_of_day
+            ORDER BY cnt DESC
+            LIMIT 1
+        )) AS dominant_time_of_day
     FROM listening_with_features
     GROUP BY played_date
 ),

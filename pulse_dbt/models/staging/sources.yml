@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: pulse_data
+    database: pulse-de-project
+    schema: pulse_data
+    tables:
+      - name: raw_listening_events
+      - name: user_embeddings
+      - name: track_features
