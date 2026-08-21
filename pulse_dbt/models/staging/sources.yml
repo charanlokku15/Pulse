@@ -2,8 +2,8 @@ version: 2
 
 sources:
   - name: pulse_data
-    database: pulse-de-project
-    schema: pulse_data
+    database: pulse
+    schema: main
     tables:
       - name: raw_listening_events
       - name: user_embeddings
