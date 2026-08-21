@@ -7,3 +7,6 @@ logs/
 
 *.zip
 .DS_Store
+
+pulse.db.bak
+*.bak
