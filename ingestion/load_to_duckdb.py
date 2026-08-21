@@ -1,137 +1,126 @@
 import duckdb
 import json
-import os
 import glob
-from datetime import datetime
+import os
+from datetime import timezone
+from dateutil import parser as dateparser
 
-# Connect to DuckDB — creates pulse.db file in your project folder
-con = duckdb.connect("pulse.db")
+# DB path is overridable so we can test against a throwaway file
+DB_PATH  = os.getenv("PULSE_DB", "pulse.db")
+RAW_GLOB = "data/raw/*.json"
+
+# US timezone abbreviations dateutil won't resolve on its own
+TZINFOS = {
+    "CDT": -5 * 3600, "CST": -6 * 3600,
+    "EDT": -4 * 3600, "EST": -5 * 3600,
+    "MDT": -6 * 3600, "MST": -7 * 3600,
+    "PDT": -7 * 3600, "PST": -8 * 3600,
+}
 
 
-def create_tables():
-    """
-    Create the raw listening events table if it doesn't exist.
-    This is your first data warehouse table.
-    """
+def create_tables(con):
     con.execute("""
         CREATE TABLE IF NOT EXISTS raw_listening_events (
-            track_name      VARCHAR,
-            artist          VARCHAR,
-            album           VARCHAR,
-            timestamp       VARCHAR,
-            unix_timestamp  BIGINT,
-            loaded_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            track_name     VARCHAR,
+            artist         VARCHAR,
+            album          VARCHAR,
+            timestamp      VARCHAR,
+            unix_timestamp BIGINT,
+            loaded_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    print("✓ Table created: raw_listening_events")
+    print("OK  table ready: raw_listening_events")
 
 
-def load_raw_files():
-    """
-    Find all JSON files in data/raw/ and load them into DuckDB.
-    Skips duplicates based on unix_timestamp.
-    """
-    raw_files = glob.glob("data/raw/*.json")
+def _coerce_unix(track):
+    """Return an int unix timestamp for a track, or None if it can't be derived.
+    Handles both scrobbles (explicit unix_timestamp) and Takeout strings like
+    'May 31, 2026, 5:13:56 PM CDT'. Naive strings are treated as UTC so the
+    result is the same on any host."""
+    uts = track.get("unix_timestamp")
+    if uts:
+        return int(uts)
+    ts = track.get("timestamp")
+    if not ts:
+        return None
+    try:
+        dt = dateparser.parse(ts, tzinfos=TZINFOS)
+    except (ValueError, OverflowError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
 
-    if not raw_files:
-        print("✗ No raw files found in data/raw/")
-        return
 
-    total_loaded = 0
+def load_raw_files(con):
+    files = sorted(glob.glob(RAW_GLOB))
+    if not files:
+        print("!!  no raw files found in data/raw/")
+        return 0
 
-    for filepath in raw_files:
-        print(f"\nLoading: {filepath}")
-
-        with open(filepath, "r") as f:
+    rows, seen, skipped = [], set(), 0
+    for fp in files:
+        with open(fp) as f:
             tracks = json.load(f)
-
-        inserted = 0
-        skipped = 0
-
-    for track in tracks:
-    # Convert string timestamp to unix if missing
-        if not track.get("unix_timestamp"):
-            if track.get("timestamp"):
-                try:
-                    from dateutil import parser as dateparser
-                    dt = dateparser.parse(track["timestamp"])
-                    track["unix_timestamp"] = int(dt.timestamp())
-                except Exception:
-                    skipped += 1
-                    continue
-            else:
+        for t in tracks:
+            u = _coerce_unix(t)
+            if u is None:
                 skipped += 1
                 continue
-
-            # Check for duplicate before inserting
-            existing = con.execute("""
-                SELECT COUNT(*) FROM raw_listening_events
-                WHERE unix_timestamp = ?
-            """, [track["unix_timestamp"]]).fetchone()[0]
-
-            if existing > 0:
-                skipped += 1
+            if u in seen:
                 continue
+            seen.add(u)
+            rows.append((
+                (t.get("track_name") or "").strip(),
+                (t.get("artist") or "").strip(),
+                (t.get("album") or "").strip(),
+                t.get("timestamp"),
+                u,
+            ))
 
-            con.execute("""
-                INSERT INTO raw_listening_events
-                (track_name, artist, album, timestamp, unix_timestamp)
-                VALUES (?, ?, ?, ?, ?)
-            """, [
-                track["track_name"],
-                track["artist"],
-                track["album"],
-                track["timestamp"],
-                track["unix_timestamp"]
-            ])
-            inserted += 1
+    if not rows:
+        print("!!  no valid rows to load")
+        return 0
 
-        print(f"  ✓ Inserted: {inserted} tracks")
-        print(f"  ○ Skipped:  {skipped} duplicates or missing timestamps")
-        total_loaded += inserted
+    con.execute("""
+        CREATE TEMP TABLE _incoming (
+            track_name VARCHAR, artist VARCHAR, album VARCHAR,
+            timestamp VARCHAR, unix_timestamp BIGINT
+        )
+    """)
+    con.executemany("INSERT INTO _incoming VALUES (?, ?, ?, ?, ?)", rows)
 
-    return total_loaded
+    before = con.execute("SELECT COUNT(*) FROM raw_listening_events").fetchone()[0]
+    con.execute("""
+        INSERT INTO raw_listening_events
+            (track_name, artist, album, timestamp, unix_timestamp)
+        SELECT i.track_name, i.artist, i.album, i.timestamp, i.unix_timestamp
+        FROM _incoming i
+        WHERE NOT EXISTS (
+            SELECT 1 FROM raw_listening_events r
+            WHERE r.unix_timestamp = i.unix_timestamp
+        )
+    """)
+    after = con.execute("SELECT COUNT(*) FROM raw_listening_events").fetchone()[0]
+    con.execute("DROP TABLE _incoming")
+
+    inserted = after - before
+    print(f"OK  inserted:        {inserted} new tracks")
+    print(f"..  already present: {len(rows) - inserted} (idempotent skip)")
+    print(f"..  skipped:         {skipped} rows with missing/unparseable timestamps")
+    return inserted
 
 
-def preview():
-    """
-    Show a preview of what's now in the warehouse.
-    """
-    count = con.execute(
-        "SELECT COUNT(*) FROM raw_listening_events"
-    ).fetchone()[0]
-
-    print(f"\n{'='*50}")
-    print(f"Total tracks in warehouse: {count}")
-    print(f"{'='*50}")
-
-    print("\nMost recent 5 tracks:")
-    rows = con.execute("""
-        SELECT artist, track_name, timestamp
-        FROM raw_listening_events
-        ORDER BY unix_timestamp DESC
-        LIMIT 5
-    """).fetchall()
-
-    for row in rows:
-        print(f"  {row[0]} — {row[1]} ({row[2]})")
-
-    print("\nTop 5 most played artists:")
-    rows = con.execute("""
-        SELECT artist, COUNT(*) as play_count
-        FROM raw_listening_events
-        GROUP BY artist
-        ORDER BY play_count DESC
-        LIMIT 5
-    """).fetchall()
-
-    for row in rows:
-        print(f"  {row[0]}: {row[1]} plays")
+def preview(con):
+    count = con.execute("SELECT COUNT(*) FROM raw_listening_events").fetchone()[0]
+    print(f"\n{'='*50}\nTotal tracks in warehouse: {count}\n{'='*50}")
 
 
 if __name__ == "__main__":
-    print("Starting DuckDB load...\n")
-    create_tables()
-    total = load_raw_files()
-    preview()
-    print("\n✓ Done. Your data is in pulse.db")
+    print(f"Loading into {DB_PATH} ...\n")
+    con = duckdb.connect(DB_PATH)
+    create_tables(con)
+    load_raw_files(con)
+    preview(con)
+    con.close()
+    print("\nDone.")
