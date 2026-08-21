@@ -4,3 +4,6 @@ data/
 .env
 pulse.db
 logs/
+
+*.zip
+.DS_Store
