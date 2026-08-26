@@ -10,3 +10,6 @@ logs/
 
 pulse.db.bak
 *.bak
+
+pulse.db.bak
+*.bak
