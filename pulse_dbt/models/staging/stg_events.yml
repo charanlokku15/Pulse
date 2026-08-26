@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: "Canonical, source-aware event model normalized across Last.fm and YouTube Takeout."
+    columns:
+      - name: event_id
+        tests: [unique, not_null]
+      - name: source
+        tests:
+          - accepted_values:
+              values: ['youtube_takeout', 'lastfm_scrobble']
+      - name: event_type
+        tests:
+          - accepted_values:
+              values: ['music', 'non_music']
+      - name: artist_type
+        tests:
+          - accepted_values:
+              values: ['artist', 'label_or_channel']
