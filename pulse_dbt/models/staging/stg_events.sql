@@ -10,10 +10,8 @@ WITH raw AS (
 
 cleaned AS (
     SELECT
-        -- deterministic, stable id (timestamp string is unique per event)
         md5(COALESCE(timestamp, '') || '|' || CAST(unix_timestamp AS VARCHAR) || '|' || source) AS event_id,
 
-        -- decode common HTML entities that appear in YouTube titles
         TRIM(replace(replace(replace(replace(track_name,
             '&quot;', '"'), '&amp;', '&'), '&#39;', ''''), '&#38;', '&')) AS track,
         TRIM(artist) AS artist,
@@ -25,7 +23,7 @@ cleaned AS (
         to_timestamp(unix_timestamp)::TIMESTAMP                    AS event_timestamp,
         date_trunc('day', to_timestamp(unix_timestamp))::TIMESTAMP AS played_date,
         EXTRACT(hour FROM to_timestamp(unix_timestamp))            AS played_hour,
-        EXTRACT(dow  FROM to_timestamp(unix_timestamp))            AS day_of_week,   -- 0 = Sunday
+        EXTRACT(dow  FROM to_timestamp(unix_timestamp))            AS day_of_week,
         (EXTRACT(dow FROM to_timestamp(unix_timestamp)) IN (0, 6)) AS is_weekend,
         CASE
             WHEN EXTRACT(hour FROM to_timestamp(unix_timestamp)) BETWEEN 5  AND 11 THEN 'morning'
@@ -41,10 +39,12 @@ cleaned AS (
 classified AS (
     SELECT
         *,
-        -- clearly-non-music titles are excluded; BGM / background score stay music
+        -- non-music signal can appear in EITHER the title or the "artist" field
+        -- (scrobbles often carry reaction/trailer content with fields reversed).
+        -- BGM / background score deliberately stay music.
         CASE
-            WHEN regexp_matches(lower(track),
-                'trailer|interview|review|reaction|roast|shorts|podcast|episode|vlog|unboxing|tutorial|explained|comedy|stand ?up|press meet|teaser|highlights')
+            WHEN regexp_matches(lower(track) || ' | ' || lower(artist),
+                'trailer|interview|review|reaction|roast|shorts|podcast|episode|season|vlog|unboxing|tutorial|explained|comedy|stand ?up|press meet|teaser|highlights|nutshell|in a nut|full movie|movie in|movie scene|scenes|first time watching')
             THEN 'non_music'
             ELSE 'music'
         END AS event_type,
