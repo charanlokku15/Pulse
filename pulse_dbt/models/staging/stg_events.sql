@@ -39,8 +39,12 @@ cleaned AS (
 classified AS (
     SELECT
         *,
-        -- non-music signal can appear in EITHER the title or the "artist" field
-        -- (scrobbles often carry reaction/trailer content with fields reversed).
+        -- Movie/album, extracted from the "(From "...")" tag in the title.
+        -- Populated for ~9% of tracks that name their film; NULL otherwise.
+        -- In Indian film music the movie IS the album. Best-effort, not guessed.
+        NULLIF(TRIM(regexp_extract(track, '(?i)\(from\s*"([^"]+)"', 1)), '') AS movie,
+
+        -- non-music signal can appear in EITHER the title or the "artist" field.
         -- BGM / background score deliberately stay music.
         CASE
             WHEN regexp_matches(lower(track) || ' | ' || lower(artist),
@@ -49,7 +53,6 @@ classified AS (
             ELSE 'music'
         END AS event_type,
 
-        -- the YouTube "artist" field is sometimes a label/channel, not a performer
         CASE
             WHEN regexp_matches(lower(artist),
                 'music|records|entertainment|t-series|saregama|release|studios|official|media|tunes|audios|label|company|productions')
@@ -68,6 +71,7 @@ SELECT
     is_weekend,
     time_of_day,
     track,
+    movie,
     artist,
     artist_type,
     album,
