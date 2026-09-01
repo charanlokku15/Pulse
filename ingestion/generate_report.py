@@ -21,7 +21,7 @@ def build(con):
     data["top_tracks_all_time"] = [
         {"rank": i+1, "track": t, "artist": a, "movie": m, "plays": p}
         for i,(t,a,m,p) in enumerate(q(con, """
-            SELECT track, artist, movie, COUNT(*) plays FROM stg_events
+            SELECT TRIM(regexp_replace(track, '(?i)\s*\(from\s*"[^"]+"\)', '')) AS track, artist, movie, COUNT(*) plays FROM stg_events
             WHERE is_valid_music_event
             GROUP BY track, artist, movie ORDER BY plays DESC LIMIT 10"""))]
 

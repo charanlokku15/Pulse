@@ -1,5 +1,5 @@
 # Pulse — Your Listening Report
-_Generated 2026-09-01T03:07:58.509575Z · latest month 2026-05-01_
+_Generated 2026-09-01T03:13:54.328224Z · latest month 2026-05-01_
 
 ## This month (2026-05-01)
 - **288 plays** across 20 active days (14.4/day)
@@ -20,7 +20,7 @@ _Generated 2026-09-01T03:07:58.509575Z · latest month 2026-05-01_
 
 ## Top tracks (all time)
 1. Manasaa — A. R. Rahman (94)
-2. Aradhya (From "Kushi") (Telugu) — *Kushi* — Hesham Abdul Wahab (89)
+2. Aradhya (Telugu) — *Kushi* — Hesham Abdul Wahab (89)
 3. Blinding Lights — The Weeknd (76)
 4. Sirivennela — Anurag Kulkarni (72)
 5. Hrudayama — Sid Sriram (69)
