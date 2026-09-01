@@ -13,3 +13,5 @@ pulse.db.bak
 
 pulse.db.bak
 *.bak
+reports/*.json
+reports/listening_report.md
