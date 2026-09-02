@@ -1,0 +1,11 @@
+.git
+venv
+frontend
+reports
+logs
+data
+*.db
+*.bak
+__pycache__
+pulse_dbt/target
+pulse_dbt/dbt_packages
