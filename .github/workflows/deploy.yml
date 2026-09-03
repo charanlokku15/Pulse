@@ -1,0 +1,72 @@
+name: Deploy Pulse
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ingestion/**'
+      - 'pulse_dbt/**'
+      - 'Dockerfile'
+      - 'entrypoint.sh'
+      - 'requirements.docker.txt'
+      - 'profiles.docker.yml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: {}   # allows manual runs from the Actions tab
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: pulse-pipeline
+  ECS_FAMILY: pulse-pipeline
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::779691446000:role/pulse-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPO:${{ github.sha }}"
+          LATEST="$REGISTRY/$ECR_REPO:latest"
+          docker build --platform linux/arm64 -t "$IMAGE" -t "$LATEST" .
+          docker push "$IMAGE"
+          docker push "$LATEST"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Register new task definition revision
+        run: |
+          # pull current task def, swap the image, strip read-only fields, re-register
+          aws ecs describe-task-definition --task-definition "$ECS_FAMILY" \
+            --query 'taskDefinition' --output json > taskdef.json
+
+          python3 - << 'PY'
+          import json
+          d = json.load(open("taskdef.json"))
+          for k in ["taskDefinitionArn","revision","status","requiresAttributes",
+                    "compatibilities","registeredAt","registeredBy"]:
+              d.pop(k, None)
+          d["containerDefinitions"][0]["image"] = "${{ env.IMAGE }}"
+          json.dump(d, open("taskdef.new.json","w"))
+          PY
+
+          aws ecs register-task-definition \
+            --cli-input-json file://taskdef.new.json \
+            --query 'taskDefinition.{family:family,revision:revision,image:containerDefinitions[0].image}' \
+            --output table
