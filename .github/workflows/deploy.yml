@@ -11,10 +11,10 @@ on:
       - 'requirements.docker.txt'
       - 'profiles.docker.yml'
       - '.github/workflows/deploy.yml'
-  workflow_dispatch: {}   # allows manual runs from the Actions tab
+  workflow_dispatch: {}
 
 permissions:
-  id-token: write   # required for OIDC
+  id-token: write
   contents: read
 
 env:
@@ -52,19 +52,14 @@ jobs:
 
       - name: Register new task definition revision
         run: |
-          # pull current task def, swap the image, strip read-only fields, re-register
           aws ecs describe-task-definition --task-definition "$ECS_FAMILY" \
             --query 'taskDefinition' --output json > taskdef.json
 
-          python3 - << 'PY'
-          import json
-          d = json.load(open("taskdef.json"))
-          for k in ["taskDefinitionArn","revision","status","requiresAttributes",
-                    "compatibilities","registeredAt","registeredBy"]:
-              d.pop(k, None)
-          d["containerDefinitions"][0]["image"] = "${{ env.IMAGE }}"
-          json.dump(d, open("taskdef.new.json","w"))
-          PY
+          jq --arg IMAGE "$IMAGE" '
+            .containerDefinitions[0].image = $IMAGE
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy)
+          ' taskdef.json > taskdef.new.json
 
           aws ecs register-task-definition \
             --cli-input-json file://taskdef.new.json \
