@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and fill in your key.
+lastfm_api_key = "your_rotated_lastfm_key_here"
+# aws_region          = "us-east-1"
+# alert_email         = "charanlokku15@gmail.com"
+# schedule_expression = "cron(0 9 * * ? *)"
+# image_tag           = "latest"
