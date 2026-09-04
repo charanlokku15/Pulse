@@ -48,19 +48,20 @@ dimension so analytics can segment or combine them, but are **never blended blin
 ## What it produces
 
 The pipeline emits a deterministic report (Markdown + JSON) built entirely from the
-marts — no LLM, always reproducible. See [`reports/sample_report.md`](reports/sample_report.md).
+marts — no LLM, always reproducible. An anonymized, structure-preserving example is in
+[`reports/sample_report.md`](reports/sample_report.md) (real names are not published):
 
 ```
-## Top musicians (all time)
-1. Karthik — 304 plays        4. Sid Sriram — 182 plays
-2. The Weeknd — 288 plays     5. A. R. Rahman — 170 plays
-3. Hesham Abdul Wahab — 230
+## Top musicians (all time)   — labels/channels excluded
+1. Artist A — 300 plays       4. Artist D — 180 plays
+2. Artist B — 285 plays       5. Artist E — 170 plays
+3. Artist C — 230
 
 ## Top tracks (all time)
-2. Aradhya (Telugu) — Kushi — Hesham Abdul Wahab (89)   # movie label extracted from title
+2. Track 02 — Movie X — Artist C (90)   # movie/album label extracted from the title
 
 ## This month
-- 288 plays / 21 active days · 28.8% new discoveries, 71.2% repeats
+- N plays / D active days · XX% new discoveries, YY% repeats
 ```
 
 ---
@@ -139,13 +140,17 @@ task definition.
 
 ## Verified results
 
-| Metric | Value | Verified by |
+| What | Value | Verified by |
 |---|---|---|
-| Events unified | 9,251 | `load_to_duckdb.py` output; two sources |
-| History span | ~728 active days over 3+ years | `mart_activity` |
-| dbt tests | 9 passing | `dbt test` in every container run |
-| Movie/album coverage | ~8% of tracks (best-effort extraction) | `stg_events.movie` |
+| Sources unified | 2 (YouTube Takeout + Last.fm) | `stg_events.source` |
+| Events | ~9K, source-aware | `load_to_duckdb.py` output |
+| History span | multi-year, ~700+ active days | `mart_activity` |
+| dbt tests | 9, run on every execution | `pulse_dbt/models/staging/stg_events.yml` |
+| Behavioral marts | 7 | `pulse_dbt/models/marts/` |
+| Movie/album extraction | best-effort from track titles | `stg_events.movie` |
 | Cloud run | Fargate task exits 0; report written to S3 | CloudWatch logs |
+
+*(Exact event counts grow as history is re-exported; figures above describe the system, not a frozen snapshot.)*
 
 ---
 
@@ -170,16 +175,26 @@ Pulse/
 
 ## Running locally
 
+The container is S3-aware (it syncs raw data from S3 and the report back up), so running
+it locally uses your AWS credentials and bucket:
+
 ```bash
 git clone https://github.com/charanlokku15/Pulse.git && cd Pulse
 docker build -t pulse-pipeline .
-# run against local raw data (rebuilds warehouse, runs dbt + tests, writes report)
-docker run --rm -v "$(pwd)/data:/app/data:ro" -v "$(pwd)/reports:/app/reports" \
-  -e S3_BUCKET="" pulse-pipeline
+docker run --rm \
+  -e S3_BUCKET="pulse-data-<account-id>" \
+  -e AWS_DEFAULT_REGION="us-east-1" \
+  -v "$HOME/.aws:/root/.aws:ro" \
+  pulse-pipeline
 ```
 
-Or without Docker: `python -m venv venv && source venv/bin/activate &&
-pip install -r requirements.txt && bash run_pipeline.sh`.
+To run the pipeline **without any cloud** (local raw JSON in `data/raw/`, no S3):
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+bash run_pipeline.sh    # load -> dbt run -> dbt test -> report, all local
+```
 
 ## AWS deployment
 
