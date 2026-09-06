@@ -35,7 +35,6 @@ def fetch_recent_tracks(limit=200):
 
         response = requests.get(BASE_URL, params=params)
         data = response.json()
-        print(f"API Response: {data}")
 
         # Get total pages on first call
         if page == 1:

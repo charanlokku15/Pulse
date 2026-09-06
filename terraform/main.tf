@@ -44,6 +44,7 @@ resource "aws_ecs_task_definition" "pulse" {
       environment = [
         { name = "S3_BUCKET", value = local.bucket_name },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        { name = "LASTFM_USERNAME", value = var.lastfm_username },
       ]
       secrets = [
         {

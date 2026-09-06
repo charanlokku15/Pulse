@@ -30,3 +30,9 @@ variable "task_memory" {
   type    = string
   default = "1024"
 }
+
+variable "lastfm_username" {
+  description = "Last.fm username (public, not a secret)"
+  type        = string
+  default     = "charanlokku"
+}
