@@ -56,6 +56,23 @@ def build(con):
         "weekday_vs_weekend": [{"bucket": b, "pct": pct} for (b,pct) in q(con, """
             SELECT bucket, pct_within_source FROM mart_listening_by_time
             WHERE source='all_sources' AND dimension='weekend' ORDER BY plays DESC""")]}
+    # --- Live scrobble activity (the part that updates each run) ---
+    data["recent_scrobbles"] = [
+        {"when": w, "track": t, "artist": a}
+        for (w, t, a) in q(con, """
+            SELECT strftime(event_timestamp, '%Y-%m-%d %H:%M') AS when_str, track, artist
+            FROM stg_events
+            WHERE source = 'lastfm_scrobble' AND is_valid_music_event
+            ORDER BY event_timestamp DESC LIMIT 10""")]
+    _c = q(con, """
+        SELECT
+          COUNT(*) FILTER (WHERE event_timestamp >= now() - INTERVAL 7 DAY),
+          COUNT(*) FILTER (WHERE event_timestamp >= now() - INTERVAL 30 DAY),
+          COUNT(*)
+        FROM stg_events
+        WHERE source = 'lastfm_scrobble' AND is_valid_music_event""")
+    data["scrobble_counts"] = {"last_7d": _c[0][0], "last_30d": _c[0][1], "total": _c[0][2]} if _c else {}
+
     return data
 
 def to_markdown(d):
@@ -78,6 +95,13 @@ def to_markdown(d):
     L.append("\n## Listening rhythm")
     L.append("- Time of day: " + ", ".join(f"{x['bucket']} {x['pct']}%" for x in d["listening_rhythm"]["by_time_of_day"]))
     L.append("- Week split: "  + ", ".join(f"{x['bucket']} {x['pct']}%" for x in d["listening_rhythm"]["weekday_vs_weekend"]))
+    sc = d.get("scrobble_counts", {})
+    if d.get("recent_scrobbles"):
+        L.append("\n## Recent scrobbles (live)")
+        L.append(f"_Last 7 days: {sc.get('last_7d','?')} · last 30 days: {sc.get('last_30d','?')} · total scrobbles: {sc.get('total','?')}_\n")
+        for r in d["recent_scrobbles"]:
+            L.append(f"- {r['when']}  {r['track']} — {r['artist']}")
+
     return "\n".join(L)
 
 if __name__ == "__main__":
