@@ -15,7 +15,7 @@ aws s3 sync "s3://${S3_BUCKET}/${RAW_PREFIX}/" data/raw/
 
 # 2. Fetch fresh scrobbles from Last.fm into a new raw file (LIVE ingestion)
 if [ -n "${LASTFM_API_KEY:-}" ] && [ -n "${LASTFM_USERNAME:-}" ]; then
-    python ingestion/fetch_tracks.py
+    python ingestion/fetch_tracks.py || echo "!! live fetch failed - continuing with existing raw data"
 else
     echo "!! LASTFM creds not set - skipping live fetch, using existing raw only"
 fi

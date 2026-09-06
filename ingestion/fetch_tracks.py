@@ -33,8 +33,15 @@ def fetch_recent_tracks(limit=200):
             "page": page
         }
 
-        response = requests.get(BASE_URL, params=params)
+        response = requests.get(BASE_URL, params=params, timeout=15)
         data = response.json()
+
+        # Last.fm returns an error object instead of tracks on failure
+        if "recenttracks" not in data:
+            print(f"!! Last.fm API did not return tracks (page {page}). "
+                  f"Response keys: {list(data.keys())} | "
+                  f"error={data.get('message', 'unknown')}")
+            break
 
         # Get total pages on first call
         if page == 1:
